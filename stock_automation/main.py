@@ -3,6 +3,15 @@ import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import re
+from dotenv import load_dotenv
+import os
+import subprocess
+import platform
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # -------------------
 # Configuration
@@ -24,6 +33,150 @@ CREDS_FILE = 'credentials.json'
 # -------------------
 # Helper Functions
 # -------------------
+
+def get_credentials():
+    """Loads credentials from the .env file."""
+    load_dotenv()
+    creds = {
+        "vpn_server": os.getenv("VPN_SERVER"),
+        "vpn_user": os.getenv("VPN_USER"),
+        "vpn_pass": os.getenv("VPN_PASS"),
+        "web_user": os.getenv("WEB_USER"),
+        "web_pass": os.getenv("WEB_PASS"),
+    }
+    if not all(creds.values()):
+        print("WARNING: Not all credentials found in .env file. VPN/Web automation may fail.")
+    return creds
+
+def find_vpn_cli_path():
+    """Finds the path to the Cisco AnyConnect VPN CLI executable."""
+    system = platform.system()
+    possible_paths = []
+    if system == "Windows":
+        possible_paths = [
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Cisco", "Cisco AnyConnect Secure Mobility Client", "vpncli.exe"),
+            os.path.join(os.environ.get("ProgramFiles", ""), "Cisco", "Cisco AnyConnect Secure Mobility Client", "vpncli.exe"),
+        ]
+    elif system == "Darwin": # macOS
+        possible_paths = ["/opt/cisco/anyconnect/bin/vpn"]
+    elif system == "Linux":
+        possible_paths = ["/opt/cisco/anyconnect/bin/vpn", "/opt/cisco/secureclient/bin/vpn"]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"Found VPN CLI at: {path}")
+            return path
+    print("WARNING: Cisco AnyConnect VPN CLI not found in standard locations.")
+    return None
+
+def connect_vpn(credentials):
+    """Connects to the VPN using the provided credentials."""
+    print("--- Step: Connecting to VPN ---")
+    cli_path = find_vpn_cli_path()
+    if not cli_path:
+        print("ERROR: Cannot connect to VPN, CLI tool not found.")
+        return False
+
+    server = credentials.get("vpn_server")
+    user = credentials.get("vpn_user")
+    password = credentials.get("vpn_pass")
+
+    if not all([server, user, password]):
+        print("ERROR: Missing VPN credentials in .env file.")
+        return False
+
+    command = f'printf "{user}\n{password}\ny" | "{cli_path}" -s connect {server}'
+    print(f"Executing VPN connection command...")
+
+    try:
+        # Using subprocess.run for better control
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=60)
+        output = result.stdout + result.stderr
+
+        if "state: Connected" in output:
+            print("VPN connection successful.")
+            return True
+        else:
+            print("ERROR: VPN connection failed.")
+            print(f"Output: {output}")
+            return False
+    except Exception as e:
+        print(f"An exception occurred while trying to connect to the VPN: {e}")
+        return False
+
+def disconnect_vpn():
+    """Disconnects from the VPN."""
+    print("--- Step: Disconnecting from VPN ---")
+    cli_path = find_vpn_cli_path()
+    if not cli_path:
+        print("WARNING: Cannot disconnect from VPN, CLI tool not found.")
+        return
+
+    command = f'"{cli_path}" disconnect'
+    print("Executing VPN disconnect command...")
+    try:
+        subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
+        print("VPN disconnected.")
+    except Exception as e:
+        print(f"An exception occurred while disconnecting from the VPN: {e}")
+
+def download_dispatch_report(credentials):
+    """Uses Selenium to automate downloading the dispatch report."""
+    print("--- Step: Automating web browser to download report ---")
+
+    # --- Browser Setup ---
+    options = webdriver.ChromeOptions()
+    # Set the download directory to the current working directory
+    prefs = {"download.default_directory" : os.getcwd()}
+    options.add_experimental_option("prefs", prefs)
+
+    driver = webdriver.Chrome(options=options)
+    wait = WebDriverWait(driver, 10) # 10-second wait timeout
+
+    try:
+        # --- Login ---
+        extranet_url = "http://10.58.1.10/Dealerextranetnew/"
+        print(f"Navigating to {extranet_url}")
+        driver.get(extranet_url)
+
+        # NOTE TO USER: The 'ID' values below are guesses. You may need to inspect
+        # the page and provide the correct IDs for the username, password, and login button.
+        print("Entering credentials...")
+        wait.until(EC.presence_of_element_located((By.ID, "txtUserId"))).send_keys(credentials.get("web_user"))
+        wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(credentials.get("web_pass"))
+        wait.until(EC.presence_of_element_located((By.ID, "btnlogin"))).click()
+        print("Login button clicked.")
+
+        # --- Navigation and Download ---
+        # NOTE TO USER: The navigation steps below are placeholders. You will need to
+        # provide the text of the links/buttons to click.
+        print("Navigating to report page...")
+        # Example:
+        # wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Reports"))).click()
+        # wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Dispatch Reports"))).click()
+
+        print("Entering date range...")
+        # Example:
+        # from_date_element = wait.until(EC.presence_of_element_located((By.ID, "from_date_picker")))
+        # from_date_element.clear()
+        # from_date_element.send_keys(datetime.datetime.now().strftime("%d-%m-%Y"))
+
+        print("Clicking download button...")
+        # Example:
+        # wait.until(EC.presence_of_element_located((By.ID, "download_button"))).click()
+
+        # Wait for download to complete (simple sleep, can be improved)
+        print("Waiting for download to complete...")
+        time.sleep(15) # Wait 15 seconds for the download to finish
+        print("Download should be complete.")
+        return True
+
+    except Exception as e:
+        print(f"An error occurred during web automation: {e}")
+        return False
+    finally:
+        print("Closing web browser.")
+        driver.quit()
 
 def get_file_names_for_today():
     """Generates the dynamic filenames for all required files based on the current date."""
@@ -402,77 +555,90 @@ def main():
     """Main function to orchestrate the entire stock automation process."""
     print("Starting the stock automation script...")
 
-    # Get today's filenames
-    file_names = get_file_names_for_today()
-    print("\nGenerated filenames for today:")
-    for key, name in file_names.items():
-        print(f"  - {key}: {name}")
+    # Load credentials from .env file
+    credentials = get_credentials()
 
-    # Step 1: Load all the initial source files
-    data_sources = load_all_data_sources(file_names)
+    # --- VPN and Download Automation (Phase 2) ---
+    # connect_vpn(credentials) # Uncomment when ready to test VPN
 
-    if data_sources is None:
-        print("\nAborting script due to errors in loading data sources.")
-        return
-
-    # Step 2: Process the Arena Google Sheet Data
-    processed_arena_df = process_arena_data(data_sources['arena_gsheet'])
-
-    # Step 3: Process the Dispatch Report Data
-    processed_dispatch_df = process_dispatch_data(
-        data_sources['dispatch_report'],
-        data_sources['vehicle_master'],
-        data_sources['color_master']
-    )
-
-    # --- Construct the initial main DataFrame ---
-    print("\n--- Constructing initial main stock DataFrame ---")
     try:
-        # Read the original ARENA sheet
-        main_stock_df = pd.read_excel(file_names['main_stock'], sheet_name='ARENA')
-        print(f"Loaded initial 'ARENA' sheet with {len(main_stock_df)} rows.")
+        # download_dispatch_report(credentials) # Uncomment when ready to test download
 
-        # Filter out old Arena data
-        main_stock_df = main_stock_df[main_stock_df[CHANNEL_COLUMN] != 'Arena']
-        print(f"Removed old Arena data, {len(main_stock_df)} rows remaining.")
+        # Get today's filenames
+        file_names = get_file_names_for_today()
+        print("\nGenerated filenames for today:")
+        for key, name in file_names.items():
+            print(f"  - {key}: {name}")
 
-        # Combine the base data with the new data from Google Sheets and Dispatch
-        frames_to_combine = [main_stock_df]
-        if processed_arena_df is not None:
-            frames_to_combine.append(processed_arena_df)
-        if processed_dispatch_df is not None:
-            frames_to_combine.append(processed_dispatch_df)
+        # Step 1: Load all the initial source files
+        data_sources = load_all_data_sources(file_names)
 
-        main_stock_df = pd.concat(frames_to_combine, ignore_index=True)
-        print(f"Combined with new data. Total rows are now: {len(main_stock_df)}")
+        if data_sources is None:
+            print("\nAborting script due to errors in loading data sources.")
+            return
 
-    except FileNotFoundError:
-        print(f"WARNING: Main stock file '{file_names['main_stock']}' not found. Starting with an empty stock list.")
-        # If the main file doesn't exist, we start fresh with the new data
-        main_stock_df = pd.concat([processed_arena_df, processed_dispatch_df], ignore_index=True)
-    except Exception as e:
-        print(f"ERROR: Could not construct initial main stock DataFrame. Reason: {e}")
-        return # Abort if we can't build the base frame
+        # Step 2: Process the Arena Google Sheet Data
+        processed_arena_df = process_arena_data(data_sources['arena_gsheet'])
 
-    # Step 4: Process DMS Stock Data
-    new_dms_vehicles_df = process_dms_stock(main_stock_df, data_sources['dms_stock'], data_sources['vehicle_master'])
-    if new_dms_vehicles_df is not None:
-        main_stock_df = pd.concat([main_stock_df, new_dms_vehicles_df], ignore_index=True)
-        print(f"Added new DMS vehicles. Total rows are now: {len(main_stock_df)}")
+        # Step 3: Process the Dispatch Report Data
+        processed_dispatch_df = process_dispatch_data(
+            data_sources['dispatch_report'],
+            data_sources['vehicle_master'],
+            data_sources['color_master']
+        )
 
-    # Step 5: Process Wings Stock Data & Reconcile
-    main_stock_df = process_wings_stock(main_stock_df, data_sources['wings_stock'])
+        # --- Construct the initial main DataFrame ---
+        print("\n--- Constructing initial main stock DataFrame ---")
+        try:
+            # Read the original ARENA sheet
+            main_stock_df = pd.read_excel(file_names['main_stock'], sheet_name='ARENA')
+            print(f"Loaded initial 'ARENA' sheet with {len(main_stock_df)} rows.")
 
-    # Step 5b: Remove invoiced vehicles from Sales Register
-    main_stock_df = remove_invoiced_vehicles(main_stock_df, data_sources['sales_register'])
+            # Filter out old Arena data
+            main_stock_df = main_stock_df[main_stock_df[CHANNEL_COLUMN] != 'Arena']
+            print(f"Removed old Arena data, {len(main_stock_df)} rows remaining.")
 
-    # Step 6: Final Data Enrichment
-    final_df = perform_final_enrichment(main_stock_df)
+            # Combine the base data with the new data from Google Sheets and Dispatch
+            frames_to_combine = [main_stock_df]
+            if processed_arena_df is not None:
+                frames_to_combine.append(processed_arena_df)
+            if processed_dispatch_df is not None:
+                frames_to_combine.append(processed_dispatch_df)
 
-    # Final Step: Save the output file
-    save_output_file(final_df, file_names['output'])
+            main_stock_df = pd.concat(frames_to_combine, ignore_index=True)
+            print(f"Combined with new data. Total rows are now: {len(main_stock_df)}")
 
-    print("\nScript finished successfully!")
+        except FileNotFoundError:
+            print(f"WARNING: Main stock file '{file_names['main_stock']}' not found. Starting with an empty stock list.")
+            # If the main file doesn't exist, we start fresh with the new data
+            main_stock_df = pd.concat([processed_arena_df, processed_dispatch_df], ignore_index=True)
+        except Exception as e:
+            print(f"ERROR: Could not construct initial main stock DataFrame. Reason: {e}")
+            return # Abort if we can't build the base frame
+
+        # Step 4: Process DMS Stock Data
+        new_dms_vehicles_df = process_dms_stock(main_stock_df, data_sources['dms_stock'], data_sources['vehicle_master'])
+        if new_dms_vehicles_df is not None:
+            main_stock_df = pd.concat([main_stock_df, new_dms_vehicles_df], ignore_index=True)
+            print(f"Added new DMS vehicles. Total rows are now: {len(main_stock_df)}")
+
+        # Step 5: Process Wings Stock Data & Reconcile
+        main_stock_df = process_wings_stock(main_stock_df, data_sources['wings_stock'])
+
+        # Step 5b: Remove invoiced vehicles from Sales Register
+        main_stock_df = remove_invoiced_vehicles(main_stock_df, data_sources['sales_register'])
+
+        # Step 6: Final Data Enrichment
+        final_df = perform_final_enrichment(main_stock_df)
+
+        # Final Step: Save the output file
+        save_output_file(final_df, file_names['output'])
+
+        print("\nScript finished successfully!")
+
+    finally:
+        # disconnect_vpn() # Uncomment when ready to test VPN
+        print("Script execution finished. VPN disconnection would happen here.")
 
 if __name__ == "__main__":
     main()

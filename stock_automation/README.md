@@ -38,7 +38,14 @@ This section will guide you through the one-time setup process required to run t
   pip install -r requirements.txt
   ```
 
-### 4. Google API Credentials
+### 4. Download the Web Driver (For Download Automation)
+- To automate the web browser, the script needs a special helper program called a "web driver". We will use the driver for Google Chrome.
+- **First, check your Chrome version:** Open Chrome, click the three dots in the top-right corner, go to "Help" -> "About Google Chrome". Note the version number (e.g., Version 128.x.x.x).
+- **Download ChromeDriver:** Go to the official ChromeDriver download page: [https://googlechromelabs.github.io/chrome-for-testing/](https://googlechromelabs.github.io/chrome-for-testing/)
+- Find the version that matches your Chrome version and download the `chromedriver-win64.zip` file (for Windows).
+- **Unzip and place the file:** Unzip the downloaded file. Inside, you will find `chromedriver.exe`. Move this `chromedriver.exe` file into your project folder (`C:\StockAutomation`), right next to `main.py`.
+
+### 5. Google API Credentials
 
 To allow the script to securely access your Google Sheets, you need to create a "Service Account" and give it permission. This is a one-time setup.
 
