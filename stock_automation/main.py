@@ -31,7 +31,7 @@ def get_file_names_for_today():
     # Note: The user mentioned "DMS_STOCK..." and "Wings stock...". Using these exact names.
     return {
         "main_stock": f"STOCK_AS_ON_{today_str}.xlsx",
-        "dispatch_report": f"DISPATCHES {today_str}.html",
+        "dispatch_report": f"DISPATCHES {today_str}.xlsx",
         "dms_stock": f"DMS_STOCK_AS_ON_{today_str}.xlsx",
         "wings_stock": f"Wings stock as on {today_str}.xlsx",
         "output": f"UPDATED_STOCK_{today_str}.xlsx"
@@ -69,11 +69,9 @@ def load_all_data_sources(file_names):
         print(f"Loading COLOR sheet from '{file_names['main_stock']}'...")
         data_sources['color_master'] = pd.read_excel(file_names['main_stock'], sheet_name='COLOR')
 
-        # 3. Dispatch Report HTML
+        # 3. Dispatch Report Excel File
         print(f"Loading Dispatch report from '{file_names['dispatch_report']}'...")
-        # read_html returns a list of DataFrames, we assume the first one is what we want
-        dispatch_tables = pd.read_html(file_names['dispatch_report'])
-        data_sources['dispatch_report'] = dispatch_tables[0]
+        data_sources['dispatch_report'] = pd.read_excel(file_names['dispatch_report'])
 
         # 4. DMS Stock File
         print(f"Loading DMS stock from '{file_names['dms_stock']}'...")
