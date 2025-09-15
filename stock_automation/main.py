@@ -34,6 +34,7 @@ def get_file_names_for_today():
         "dispatch_report": f"DISPATCHES {today_str}.xlsx",
         "dms_stock": f"DMS_STOCK_AS_ON_{today_str}.xlsx",
         "wings_stock": f"Wings stock as on {today_str}.xlsx",
+        "sales_register": f"DMS SALES REGISTER AS ON {today_str}.xlsx",
         "output": f"UPDATED_STOCK_{today_str}.xlsx"
     }
 
@@ -80,6 +81,10 @@ def load_all_data_sources(file_names):
         # 5. Wings Stock File
         print(f"Loading Wings stock from '{file_names['wings_stock']}'...")
         data_sources['wings_stock'] = pd.read_excel(file_names['wings_stock'])
+
+        # 6. Sales Register File
+        print(f"Loading Sales Register from '{file_names['sales_register']}'...")
+        data_sources['sales_register'] = pd.read_excel(file_names['sales_register'])
 
         # We will load the main 'ARENA' sheet in the main function.
 
@@ -163,8 +168,8 @@ def process_dispatch_data(dispatch_df, vehicle_master_df, color_master_df):
     column_mapping = {
         VIN_COLUMN: VIN_COLUMN,
         'Model Desc': 'Model',
-        'Variant Desc': 'Varriant',
-        'Varriant S': 's Varient',
+        'Variant Desc': 'Varient',
+        'Varriant S': 'Varriant s',
         'ENGINENO': 'Engine',
         'Description': 'Color', # This is the looked-up color description from color_master
         'INVOICEDATE': 'Purc. Dt.'
@@ -190,22 +195,19 @@ def process_dispatch_data(dispatch_df, vehicle_master_df, color_master_df):
     print("Finished processing dispatch data.")
     return final_dispatch_df
 
-def process_dms_stock(main_df, dms_df):
+def process_dms_stock(main_df, dms_df, vehicle_master_df):
     """
-    Processes the DMS stock file, filters out NEXA locations, and identifies new vehicles to be added.
+    Processes DMS stock, finds new vehicles, and looks up model/variant info.
     """
     print("--- Step 4: Processing DMS Stock data ---")
     if dms_df is None or dms_df.empty:
         print("DMS stock data is empty. Skipping.")
         return None
 
-    # 1. Filter out rows where 'Dealer Location' contains '(NEXA)'
+    # 1. Filter out NEXA locations
     if 'Dealer Location' in dms_df.columns:
-        original_rows = len(dms_df)
         dms_df = dms_df[~dms_df['Dealer Location'].str.contains("(NEXA)", na=False)]
-        print(f"Filtered {original_rows - len(dms_df)} NEXA rows from DMS stock.")
-    else:
-        print("WARNING: 'Dealer Location' column not found in DMS Stock.")
+        print(f"Filtered out NEXA locations from DMS stock.")
 
     # 2. Find new vehicles by comparing VINs
     existing_vins = main_df[VIN_COLUMN].unique()
@@ -214,21 +216,27 @@ def process_dms_stock(main_df, dms_df):
     if new_vehicles_df.empty:
         print("No new vehicles found in DMS stock to add.")
         return None
-
     print(f"Found {len(new_vehicles_df)} new vehicles in DMS stock.")
 
-    # 3. Map columns to the main stock format
+    # 3. Create lookup key and merge with vehicle master
+    new_vehicles_df['MODELCODE'] = new_vehicles_df['Variant Code'].astype(str) + "00"
+    print("Created lookup key from 'Variant Code'.")
+
+    merged_df = pd.merge(new_vehicles_df, vehicle_master_df, left_on='MODELCODE', right_on='Vehicle code', how='left', suffixes=('', '_vmaster'))
+    print("Merged DMS stock with VEHICLE master data.")
+
+    # 4. Map columns, now using the looked-up values
     column_mapping = {
         'VIN': VIN_COLUMN,
-        'Model Desc': 'Model',
-        'Variant Desc': 'Varient',
+        'Model Desc_vmaster': 'Model', # Use looked-up value
+        'Variant Desc_vmaster': 'Varient', # Use looked-up value
         'Engine No': 'Engine',
         'Colour': 'Color',
         'MUL Inv Dt.': 'Purc. Dt.'
     }
 
     # Select and rename columns
-    new_vehicles_processed = new_vehicles_df[list(column_mapping.keys())].rename(columns=column_mapping)
+    new_vehicles_processed = merged_df[list(column_mapping.keys())].rename(columns=column_mapping)
 
     print("Finished processing DMS stock data.")
     return new_vehicles_processed
@@ -280,6 +288,54 @@ def process_wings_stock(main_df, wings_df):
 
     print("Finished processing Wings stock data.")
     return main_df_updated
+
+def find_scattered_vin(row):
+    """Helper function to find a VIN-like string in a row."""
+    vin_pattern = re.compile(r'^(MA3|MBH|MAJ)[A-Z0-9]{14}$')
+    for item in row:
+        if isinstance(item, str) and vin_pattern.match(item):
+            return item
+    return None
+
+def remove_invoiced_vehicles(main_df, sales_register_df):
+    """Filters sales register for real sales, then removes those VINs from main stock."""
+    print("--- (New) Removing invoiced vehicles using Sales Register ---")
+    if sales_register_df is None or sales_register_df.empty:
+        print("Sales Register data is empty. Skipping.")
+        return main_df
+
+    # 1. Filter out "fake" sales
+    customer_col = 'Customer Name' # Assuming this column name
+    if customer_col in sales_register_df.columns:
+        original_rows = len(sales_register_df)
+        sales_register_df[customer_col] = sales_register_df[customer_col].astype(str)
+
+        # Define a function to check for the "fake sale" pattern
+        def is_fake_sale(name):
+            parts = name.split()
+            if len(parts) > 1 and len(parts[0]) == 1 and parts[0].upper() in ['F', 'G']:
+                return True
+            return False
+
+        # Keep rows where the customer name does NOT match the fake sale pattern
+        sales_register_df = sales_register_df[~sales_register_df[customer_col].apply(is_fake_sale)]
+        print(f"Filtered {original_rows - len(sales_register_df)} fake sales from Sales Register.")
+    else:
+        print(f"WARNING: Customer column '{customer_col}' not found in Sales Register. Cannot filter fake sales.")
+
+    # 2. Find VINs in the cleaned sales data
+    sold_vins = sales_register_df.apply(find_scattered_vin, axis=1).dropna().unique()
+
+    # 3. Remove sold VINs from main stock
+    if len(sold_vins) > 0:
+        print(f"Found {len(sold_vins)} unique invoiced VINs to remove.")
+        original_rows = len(main_df)
+        main_df = main_df[~main_df[VIN_COLUMN].isin(sold_vins)]
+        print(f"Removed {original_rows - len(main_df)} invoiced vehicles from the main stock list.")
+    else:
+        print("No matching invoiced VINs found in the sales register to remove.")
+
+    return main_df
 
 def perform_final_enrichment(main_df):
     """
@@ -399,13 +455,16 @@ def main():
         return # Abort if we can't build the base frame
 
     # Step 4: Process DMS Stock Data
-    new_dms_vehicles_df = process_dms_stock(main_stock_df, data_sources['dms_stock'])
+    new_dms_vehicles_df = process_dms_stock(main_stock_df, data_sources['dms_stock'], data_sources['vehicle_master'])
     if new_dms_vehicles_df is not None:
         main_stock_df = pd.concat([main_stock_df, new_dms_vehicles_df], ignore_index=True)
         print(f"Added new DMS vehicles. Total rows are now: {len(main_stock_df)}")
 
     # Step 5: Process Wings Stock Data & Reconcile
     main_stock_df = process_wings_stock(main_stock_df, data_sources['wings_stock'])
+
+    # Step 5b: Remove invoiced vehicles from Sales Register
+    main_stock_df = remove_invoiced_vehicles(main_stock_df, data_sources['sales_register'])
 
     # Step 6: Final Data Enrichment
     final_df = perform_final_enrichment(main_stock_df)
