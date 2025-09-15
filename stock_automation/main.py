@@ -311,6 +311,11 @@ def perform_final_enrichment(main_df):
     main_df['MAKE YEAR'] = main_df['Purc. Dt.'].dt.year
     print("Calculated 'MAKE YEAR' column.")
 
+    # De-duplicate the final DataFrame
+    original_rows = len(main_df)
+    main_df.drop_duplicates(subset=[VIN_COLUMN], keep='first', inplace=True)
+    print(f"Removed {original_rows - len(main_df)} duplicate chassis numbers, keeping the first entry.")
+
     print("Finished data enrichment.")
     return main_df
 
