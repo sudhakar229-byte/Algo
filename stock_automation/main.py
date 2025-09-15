@@ -276,7 +276,7 @@ def process_wings_stock(main_df, wings_df):
     print(f"Updated {transit_mask.sum()} rows to 'Transit' status.")
 
     # Drop the temporary columns from the merge
-    main_df_updated = main_df_updated.drop(columns=['location', 'Status', WINGS_CHASSIS_COLUMN+'_wings'])
+    main_df_updated = main_df_updated.drop(columns=['location', 'Status', WINGS_CHASSIS_COLUMN])
 
     print("Finished processing Wings stock data.")
     return main_df_updated
