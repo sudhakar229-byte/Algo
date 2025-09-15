@@ -38,14 +38,7 @@ This section will guide you through the one-time setup process required to run t
   pip install -r requirements.txt
   ```
 
-### 4. Download the Web Driver (For Download Automation)
-- To automate the web browser, the script needs a special helper program called a "web driver". We will use the driver for Microsoft Edge.
-- **First, check your Edge version:** Open Microsoft Edge, click the three dots in the top-right corner, go to "Help and feedback" -> "About Microsoft Edge". Note the version number (e.g., Version 128.x.x.x).
-- **Download Edge Driver:** Go to the official Microsoft Edge Driver download page: [https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/)
-- On the page, look for the section that matches your version number (e.g., "Version 128") and click the download link for your platform (e.g., "x64" for 64-bit Windows).
-- **Unzip and place the file:** Unzip the downloaded file. Inside, you will find `msedgedriver.exe`. Move this `msedgedriver.exe` file into your project folder (`C:\StockAutomation`), right next to `main.py`.
-
-### 5. Google API Credentials
+### 4. Google API Credentials
 
 To allow the script to securely access your Google Sheets, you need to create a "Service Account" and give it permission. This is a one-time setup.
 
@@ -117,7 +110,3 @@ Once the setup is complete, you can run the script every day to automate your wo
 3.  **Get Your Output:**
     *   The script will print its progress in the window.
     *   When it is finished, a new file named `UPDATED_STOCK_DD-MM-YYYY.xlsx` will be created in your project folder. This file contains the final, processed data.
-
-## Future Improvements (Phase 2)
-
-- Automate the VPN connection and the download of the daily reports from the company extranet.

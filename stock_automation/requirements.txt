@@ -3,5 +3,3 @@ openpyxl
 gspread
 google-api-python-client
 lxml
-selenium
-python-dotenv
