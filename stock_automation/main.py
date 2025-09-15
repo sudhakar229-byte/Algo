@@ -221,7 +221,7 @@ def process_dms_stock(main_df, dms_df):
     column_mapping = {
         'VIN': VIN_COLUMN,
         'Model Desc': 'Model',
-        'Variant Desc': 'Varriant',
+        'Variant Desc': 'Varient',
         'Engine No': 'Engine',
         'Colour': 'Color',
         'MUL Inv Dt.': 'Purc. Dt.'
@@ -313,6 +313,14 @@ def perform_final_enrichment(main_df):
     original_rows = len(main_df)
     main_df.drop_duplicates(subset=[VIN_COLUMN], keep='first', inplace=True)
     print(f"Removed {original_rows - len(main_df)} duplicate chassis numbers, keeping the first entry.")
+
+    # Format 'Purc. Dt.' to the desired string format
+    main_df['Purc. Dt.'] = main_df['Purc. Dt.'].dt.strftime('%d-%m-%Y')
+    print("Formatted 'Purc. Dt.' column to DD-MM-YYYY.")
+
+    # Generate final serial numbers
+    main_df['Sr. No.'] = range(1, len(main_df) + 1)
+    print("Generated final 'Sr. No.' column.")
 
     print("Finished data enrichment.")
     return main_df
