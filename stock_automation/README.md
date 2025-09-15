@@ -39,11 +39,11 @@ This section will guide you through the one-time setup process required to run t
   ```
 
 ### 4. Download the Web Driver (For Download Automation)
-- To automate the web browser, the script needs a special helper program called a "web driver". We will use the driver for Google Chrome.
-- **First, check your Chrome version:** Open Chrome, click the three dots in the top-right corner, go to "Help" -> "About Google Chrome". Note the version number (e.g., Version 128.x.x.x).
-- **Download ChromeDriver:** Go to the official ChromeDriver download page: [https://googlechromelabs.github.io/chrome-for-testing/](https://googlechromelabs.github.io/chrome-for-testing/)
-- Find the version that matches your Chrome version and download the `chromedriver-win64.zip` file (for Windows).
-- **Unzip and place the file:** Unzip the downloaded file. Inside, you will find `chromedriver.exe`. Move this `chromedriver.exe` file into your project folder (`C:\StockAutomation`), right next to `main.py`.
+- To automate the web browser, the script needs a special helper program called a "web driver". We will use the driver for Microsoft Edge.
+- **First, check your Edge version:** Open Microsoft Edge, click the three dots in the top-right corner, go to "Help and feedback" -> "About Microsoft Edge". Note the version number (e.g., Version 128.x.x.x).
+- **Download Edge Driver:** Go to the official Microsoft Edge Driver download page: [https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/)
+- On the page, look for the section that matches your version number (e.g., "Version 128") and click the download link for your platform (e.g., "x64" for 64-bit Windows).
+- **Unzip and place the file:** Unzip the downloaded file. Inside, you will find `msedgedriver.exe`. Move this `msedgedriver.exe` file into your project folder (`C:\StockAutomation`), right next to `main.py`.
 
 ### 5. Google API Credentials
 

@@ -121,23 +121,30 @@ def disconnect_vpn():
         print(f"An exception occurred while disconnecting from the VPN: {e}")
 
 def download_dispatch_report(credentials):
-    """Uses Selenium to automate downloading the dispatch report."""
+    """Uses Selenium to automate downloading the dispatch report using Edge in IE Mode."""
     print("--- Step: Automating web browser to download report ---")
 
-    # --- Browser Setup ---
-    options = webdriver.ChromeOptions()
-    # Set the download directory to the current working directory
+    # --- Browser Setup for Edge in IE Mode ---
+    options = webdriver.EdgeOptions()
+    options.add_argument("--disable-gpu")
+    # This is the crucial part for IE Mode
+    options.ie_options = {
+        "ie.edgechromium": True,
+        "ie.edgepath": "/usr/bin/microsoft-edge", # This might need adjustment
+        "ie.initialBrowserUrl": "http://10.58.1.10/Dealerextranetnew/"
+    }
+
+    # Set the download directory
     prefs = {"download.default_directory" : os.getcwd()}
     options.add_experimental_option("prefs", prefs)
 
-    driver = webdriver.Chrome(options=options)
+    driver = webdriver.Edge(options=options)
     wait = WebDriverWait(driver, 10) # 10-second wait timeout
 
     try:
         # --- Login ---
-        extranet_url = "http://10.58.1.10/Dealerextranetnew/"
-        print(f"Navigating to {extranet_url}")
-        driver.get(extranet_url)
+        # The initial navigation is handled by the 'initialBrowserUrl' option for IE Mode.
+        print("Browser launched in IE Mode. Waiting for login elements...")
 
         # NOTE TO USER: The 'ID' values below are guesses. You may need to inspect
         # the page and provide the correct IDs for the username, password, and login button.
