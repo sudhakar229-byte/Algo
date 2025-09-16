@@ -67,6 +67,9 @@ def load_all_data_sources(file_names):
         print(f"Loading COLOR sheet from '{file_names['main_stock']}'...")
         data_sources['color_master'] = pd.read_excel(file_names['main_stock'], sheet_name='COLOR')
 
+        print(f"Loading MASTER sheet from '{file_names['main_stock']}'...")
+        data_sources['master_sheet'] = pd.read_excel(file_names['main_stock'], sheet_name='MASTER')
+
         print(f"Loading Dispatch report from '{file_names['dispatch_report']}'...")
         data_sources['dispatch_report'] = pd.read_excel(file_names['dispatch_report'])
 
@@ -99,10 +102,9 @@ def process_arena_data(arena_df):
     if arena_df is None or arena_df.empty:
         print("Arena Google Sheet data is empty. Skipping.")
         return arena_df
+    # Add 'Channel' column and an empty 'Color 2' column as a placeholder
     arena_df[CHANNEL_COLUMN] = 'ARENA'
-    if 'Color' in arena_df.columns:
-        color_col_index = arena_df.columns.get_loc('Color')
-        arena_df.insert(color_col_index + 1, 'Color 2', arena_df['Color'].shift(1))
+    arena_df['Color 2'] = pd.NA
     return arena_df
 
 def process_dispatch_data(dispatch_df, vehicle_master_df, color_master_df):
@@ -132,9 +134,7 @@ def process_dispatch_data(dispatch_df, vehicle_master_df, color_master_df):
 
     final_df = processed_df[required_cols].rename(columns=column_mapping)
     final_df[CHANNEL_COLUMN] = 'ARENA'
-    if 'Color' in final_df.columns:
-        color_col_index = final_df.columns.get_loc('Color')
-        final_df.insert(color_col_index + 1, 'Color 2', final_df['Color'].shift(1))
+    final_df['Color 2'] = pd.NA # Add placeholder column
     return final_df
 
 def process_dms_stock(main_df, dms_df, vehicle_master_df):
@@ -204,14 +204,22 @@ def remove_invoiced_vehicles(main_df, sales_register_df):
 
     return main_df
 
-def perform_final_enrichment(main_df):
+def perform_final_enrichment(main_df, master_df):
     """Performs final calculations and cleaning on the DataFrame."""
     print("--- Performing final data enrichment ---")
     if main_df is None or main_df.empty: return main_df
 
+    # --- VLOOKUP for Color 2 ---
+    if master_df is not None and 'Color' in main_df.columns and 'COLOR' in master_df.columns and 'COLOR 2' in master_df.columns:
+        # Create a mapping dictionary from the master sheet
+        color_map = master_df.set_index('COLOR')['COLOR 2'].to_dict()
+        # Update the 'Color 2' column based on the 'Color' column
+        main_df['Color 2'] = main_df['Color'].map(color_map).fillna(main_df['Color 2'])
+        print("Updated 'Color 2' column using MASTER sheet lookup.")
+
     main_df['Allocation Status'].fillna('AVAILABLE', inplace=True)
     main_df['Purc. Dt.'] = pd.to_datetime(main_df['Purc. Dt.'], errors='coerce')
-    main_df['AGEING'] = (datetime.datetime.now() - main_df['Purc. Dt.']).dt.days
+    main_df['AGEING'] = (datetime.datetime.now() - main_df['Purc. Dt.'].dt.tz_localize(None)).dt.days
     main_df['MAKE YEAR'] = main_df['Purc. Dt.'].dt.year
     main_df.drop_duplicates(subset=[VIN_COLUMN], keep='first', inplace=True)
     main_df['Purc. Dt.'] = main_df['Purc. Dt.'].dt.strftime('%d-%m-%Y')
@@ -269,7 +277,7 @@ def main():
 
     main_stock_df = process_wings_stock(main_stock_df, data_sources['wings_stock'])
     main_stock_df = remove_invoiced_vehicles(main_stock_df, data_sources['sales_register'])
-    final_df = perform_final_enrichment(main_stock_df)
+    final_df = perform_final_enrichment(main_stock_df, data_sources['master_sheet'])
 
     save_output_file(final_df, file_names['output'])
     print("\nScript finished successfully!")
