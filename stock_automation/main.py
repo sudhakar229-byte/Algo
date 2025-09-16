@@ -209,29 +209,72 @@ def perform_final_enrichment(main_df, master_df):
     print("--- Performing final data enrichment ---")
     if main_df is None or main_df.empty: return main_df
 
+    # --- Data Type Conversion ---
+    # Convert Purc. Dt. to datetime for sorting and calculations. Coerce errors will turn failed parses into NaT.
+    main_df['Purc. Dt.'] = pd.to_datetime(main_df['Purc. Dt.'], errors='coerce')
+
+    # --- Sorting ---
+    print("Sorting data by Model, Variant, Color, and Purchase Date...")
+    sort_columns = ['Model', 'Varriant s', 'Color', 'Purc. Dt.']
+    # Check if all sort columns exist to prevent errors
+    existing_sort_columns = [col for col in sort_columns if col in main_df.columns]
+    if len(existing_sort_columns) < len(sort_columns):
+        print(f"WARNING: One or more sort columns not found. Sorting by available columns: {existing_sort_columns}")
+
+    if existing_sort_columns:
+        main_df.sort_values(by=existing_sort_columns, ascending=True, inplace=True)
+        print("Sorting complete.")
+
+    # --- VLOOKUP for Channel ---
+    if master_df is not None and 'Model' in main_df.columns and 'MODEL' in master_df.columns and 'CHANEL' in master_df.columns:
+        print("Updating 'Channel' column using MASTER sheet lookup...")
+        # Create temporary, cleaned keys for a robust, case/whitespace-insensitive lookup
+        main_df['temp_model_key'] = main_df['Model'].astype(str).str.strip().str.lower()
+        master_df['temp_model_key'] = master_df['MODEL'].astype(str).str.strip().str.lower()
+
+        # Create mapping dictionary from the cleaned master sheet
+        channel_map = master_df.drop_duplicates(subset=['temp_model_key']).set_index('temp_model_key')['CHANEL'].to_dict()
+
+        # Update the 'Channel' column, preserving existing values if lookup fails
+        main_df[CHANNEL_COLUMN] = main_df['temp_model_key'].map(channel_map).fillna(main_df[CHANNEL_COLUMN])
+
+        # Remove temporary columns
+        main_df.drop(columns=['temp_model_key'], inplace=True)
+        # Clean up master_df as well to prevent issues in other functions if it's reused
+        if 'temp_model_key' in master_df.columns:
+            master_df.drop(columns=['temp_model_key'], inplace=True)
+        print("Updated 'Channel' column.")
+
     # --- VLOOKUP for Color 2 ---
     if master_df is not None and 'Color' in main_df.columns and 'COLOR' in master_df.columns and 'COLOR 2' in master_df.columns:
-        # Create temporary, cleaned columns for a robust, case-insensitive lookup
+        print("Updating 'Color 2' column using robust MASTER sheet lookup.")
+        # Create temporary, cleaned keys for a robust, case/whitespace-insensitive lookup
         main_df['temp_color_key'] = main_df['Color'].astype(str).str.strip().str.lower()
         master_df['temp_color_key'] = master_df['COLOR'].astype(str).str.strip().str.lower()
 
-        # Create a mapping dictionary from the cleaned master sheet, dropping duplicates to be safe
+        # Create mapping dictionary from the cleaned master sheet
         color_map = master_df.drop_duplicates(subset=['temp_color_key']).set_index('temp_color_key')['COLOR 2'].to_dict()
 
-        # Update the 'Color 2' column using the cleaned key
+        # Update the 'Color 2' column, preserving existing values if lookup fails
         main_df['Color 2'] = main_df['temp_color_key'].map(color_map).fillna(main_df['Color 2'])
 
-        # Remove the temporary columns
+        # Remove temporary columns
         main_df.drop(columns=['temp_color_key'], inplace=True)
-        master_df.drop(columns=['temp_color_key'], inplace=True)
-        print("Updated 'Color 2' column using robust MASTER sheet lookup.")
+        if 'temp_color_key' in master_df.columns:
+            master_df.drop(columns=['temp_color_key'], inplace=True)
+        print("Updated 'Color 2' column.")
 
+    # --- Final Calculations & Cleaning ---
     main_df['Allocation Status'].fillna('AVAILABLE', inplace=True)
-    main_df['Purc. Dt.'] = pd.to_datetime(main_df['Purc. Dt.'], errors='coerce')
     main_df['AGEING'] = (datetime.datetime.now() - main_df['Purc. Dt.'].dt.tz_localize(None)).dt.days
-    main_df['MAKE YEAR'] = main_df['Purc. Dt.'].dt.year
+    main_df['MAKE YEAR'] = main_df['Purc. Dt.'].dt.year.astype('Int64') # Use nullable integer
     main_df.drop_duplicates(subset=[VIN_COLUMN], keep='first', inplace=True)
+
+    # Format date back to string for the final report
     main_df['Purc. Dt.'] = main_df['Purc. Dt.'].dt.strftime('%d-%m-%Y')
+
+    # Reset index after sorting to ensure 'Sr. No.' is sequential
+    main_df.reset_index(drop=True, inplace=True)
     main_df['Sr. No.'] = range(1, len(main_df) + 1)
 
     return main_df
