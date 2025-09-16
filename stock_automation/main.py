@@ -211,11 +211,20 @@ def perform_final_enrichment(main_df, master_df):
 
     # --- VLOOKUP for Color 2 ---
     if master_df is not None and 'Color' in main_df.columns and 'COLOR' in master_df.columns and 'COLOR 2' in master_df.columns:
-        # Create a mapping dictionary from the master sheet
-        color_map = master_df.set_index('COLOR')['COLOR 2'].to_dict()
-        # Update the 'Color 2' column based on the 'Color' column
-        main_df['Color 2'] = main_df['Color'].map(color_map).fillna(main_df['Color 2'])
-        print("Updated 'Color 2' column using MASTER sheet lookup.")
+        # Create temporary, cleaned columns for a robust, case-insensitive lookup
+        main_df['temp_color_key'] = main_df['Color'].astype(str).str.strip().str.lower()
+        master_df['temp_color_key'] = master_df['COLOR'].astype(str).str.strip().str.lower()
+
+        # Create a mapping dictionary from the cleaned master sheet, dropping duplicates to be safe
+        color_map = master_df.drop_duplicates(subset=['temp_color_key']).set_index('temp_color_key')['COLOR 2'].to_dict()
+
+        # Update the 'Color 2' column using the cleaned key
+        main_df['Color 2'] = main_df['temp_color_key'].map(color_map).fillna(main_df['Color 2'])
+
+        # Remove the temporary columns
+        main_df.drop(columns=['temp_color_key'], inplace=True)
+        master_df.drop(columns=['temp_color_key'], inplace=True)
+        print("Updated 'Color 2' column using robust MASTER sheet lookup.")
 
     main_df['Allocation Status'].fillna('AVAILABLE', inplace=True)
     main_df['Purc. Dt.'] = pd.to_datetime(main_df['Purc. Dt.'], errors='coerce')
