@@ -219,6 +219,7 @@ def perform_final_enrichment(main_df, master_df):
     print("--- Performing final data enrichment ---")
     if main_df is None or main_df.empty: return main_df
 
+
     # --- Data Type Conversion ---
     # Convert Purc. Dt. to datetime for sorting and calculations. Coerce errors will turn failed parses into NaT.
     main_df['Purc. Dt.'] = pd.to_datetime(main_df['Purc. Dt.'], errors='coerce')
@@ -242,6 +243,7 @@ def perform_final_enrichment(main_df, master_df):
         main_df['temp_model_key'] = main_df['Model'].apply(normalize_key)
         master_df['temp_model_key'] = master_df['MODEL'].apply(normalize_key)
 
+
         # Create mapping dictionary from the cleaned master sheet
         channel_map = master_df.drop_duplicates(subset=['temp_model_key']).set_index('temp_model_key')['CHANEL'].to_dict()
 
@@ -261,6 +263,7 @@ def perform_final_enrichment(main_df, master_df):
         # Create temporary, cleaned keys for a robust, case/whitespace-insensitive lookup
         main_df['temp_color_key'] = main_df['Color'].apply(normalize_key)
         master_df['temp_color_key'] = master_df['COLOR'].apply(normalize_key)
+
 
         # Create mapping dictionary from the cleaned master sheet
         color_map = master_df.drop_duplicates(subset=['temp_color_key']).set_index('temp_color_key')['COLOR 2'].to_dict()
