@@ -36,6 +36,16 @@ def get_file_names_for_today():
         "output": f"UPDATED_STOCK_{today_str}.xlsx"
     }
 
+def normalize_key(key):
+    """
+    Normalizes a string key for robust matching by converting to lowercase
+    and removing all non-alphanumeric characters.
+    """
+    if pd.isna(key):
+        return ""
+    # Remove all non-alphanumeric characters and convert to lowercase.
+    return re.sub(r'[^a-z0-9]', '', str(key).lower())
+
 def get_google_sheet_data(url):
     """Connects to a Google Sheet and returns the data from the first worksheet."""
     try:
@@ -229,8 +239,8 @@ def perform_final_enrichment(main_df, master_df):
     if master_df is not None and 'Model' in main_df.columns and 'MODEL' in master_df.columns and 'CHANEL' in master_df.columns:
         print("Updating 'Channel' column using MASTER sheet lookup...")
         # Create temporary, cleaned keys for a robust, case/whitespace-insensitive lookup
-        main_df['temp_model_key'] = main_df['Model'].astype(str).str.strip().str.lower()
-        master_df['temp_model_key'] = master_df['MODEL'].astype(str).str.strip().str.lower()
+        main_df['temp_model_key'] = main_df['Model'].apply(normalize_key)
+        master_df['temp_model_key'] = master_df['MODEL'].apply(normalize_key)
 
         # Create mapping dictionary from the cleaned master sheet
         channel_map = master_df.drop_duplicates(subset=['temp_model_key']).set_index('temp_model_key')['CHANEL'].to_dict()
@@ -249,8 +259,8 @@ def perform_final_enrichment(main_df, master_df):
     if master_df is not None and 'Color' in main_df.columns and 'COLOR' in master_df.columns and 'COLOR 2' in master_df.columns:
         print("Updating 'Color 2' column using robust MASTER sheet lookup.")
         # Create temporary, cleaned keys for a robust, case/whitespace-insensitive lookup
-        main_df['temp_color_key'] = main_df['Color'].astype(str).str.strip().str.lower()
-        master_df['temp_color_key'] = master_df['COLOR'].astype(str).str.strip().str.lower()
+        main_df['temp_color_key'] = main_df['Color'].apply(normalize_key)
+        master_df['temp_color_key'] = master_df['COLOR'].apply(normalize_key)
 
         # Create mapping dictionary from the cleaned master sheet
         color_map = master_df.drop_duplicates(subset=['temp_color_key']).set_index('temp_color_key')['COLOR 2'].to_dict()
