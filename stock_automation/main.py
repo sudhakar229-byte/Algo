@@ -165,6 +165,7 @@ def process_dms_stock(main_df, dms_df, vehicle_master_df):
 
     column_mapping = {
         'VIN': VIN_COLUMN, 'Model Desc_y': 'Model', 'Variant Desc_y': 'Varient',
+        'Varriant S': 'Varriant s',
         'Engine No': 'Engine', 'Colour': 'Color', 'MUL Inv Dt.': 'Purc. Dt.'
     }
     return merged_df.rename(columns=column_mapping)[list(column_mapping.values())]
